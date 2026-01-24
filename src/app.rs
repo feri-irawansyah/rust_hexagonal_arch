@@ -4,7 +4,8 @@ use actix_web::{App, HttpServer, middleware, web};
 
 use crate::{
     api::features::order_feature::order_feature, 
-    application::services::order::order_service::OrderService, infrastructure::{database::connection::create_connection, repositories::order_repository::OrderRepository}
+    applications::services::order::order_service::OrderService, 
+    infrastructure::{database::connection::create_connection, repositories::order_repository::OrderRepository}
 };
 
 #[derive(Clone)]
