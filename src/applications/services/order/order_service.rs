@@ -5,8 +5,7 @@ use tokio::{sync::mpsc, time::Instant};
 
 use crate::{
     applications::{
-        services::order::domain::order_entity::{BrokerTrxState, ClientTrxState, OrderEntity, ProcessingConfig}, 
-        contracts::order_trait::TOrderRepository
+        contracts::order_trait::TOrderRepository, services::order::domain::order_entity::{BrokerTrxState, ClientTrxState, MatchResult, OrderDone, OrderEntity, PartialMatch, ProcessingConfig}
     }, 
     infrastructure::database::snapshot::SnapshotDb
 };
@@ -45,16 +44,22 @@ impl OrderService {
                 ("client", None),
                 ("broker", None),
                 ("order", None),
+                ("broker_commission_trx", None),
+                ("client_commission_trx", None),
+                ("trx_type_match", None),
+                ("trx_type", None),
             ];
 
             for (table, where_clause) in tables {
                 let start = Instant::now();
-                if let Err(e) = snapshot.load_data_from_db(table, where_clause) {
+                if let Err(e) = snapshot.load_data_from_parquet(table, where_clause) {
                     eprintln!("[JOB] snapshot failed table={}: {}", table, e);
                     continue;
                 }
                 println!("[JOB] snapshot table={} done in {:?}", table, start.elapsed());
             }
+            
+            // dummy execute to clear cache
         Ok("Load match data completed".to_string())
     }
 
@@ -194,15 +199,250 @@ impl OrderService {
 
     pub async fn match_orders_async(&self) -> Result<String> {
         let repo = self.repo.clone();
+        let start = Instant::now();
+        
+        // let snapshot = SnapshotDb::new().unwrap();
+        // tokio::spawn(async move { 
+        //     let repo_clone = repo.clone();
+        //     let handle = tokio::task::spawn_blocking(move || -> Result<MatchResult> {
+        //         repo_clone.create_btx_temp(&snapshot)?;
+        //         repo_clone.create_ctx_temp(&snapshot)?;
+        //         repo_clone.create_alloc_temp(&snapshot)?;
+
+        //         let query = r#"
+        //             SELECT
+        //                 t.trade_nid,
+        //                 a.order_nid,
+        //                 a.alloc_volume,
+        //                 t.trade_volume - a.alloc_volume AS remain_volume,
+        //                 CASE
+        //                     WHEN a.alloc_volume = t.trade_volume THEN 1
+        //                     ELSE 2
+        //                 END AS match_type
+        //             FROM read_parquet('snapshot_trade.parquet') t
+        //             JOIN alloc_temp a
+        //                 ON a.trade_nid = t.trade_nid
+        //             WHERE a.alloc_volume > 0;
+        //         "#;
+
+        //         let mut full = Vec::new();
+        //         let mut partial = Vec::new();
+
+        //         let mut stmt = snapshot.conn().prepare(query)?;
+        //         let rows = stmt.query_map([], |row| {
+        //             let alloc_volume = OrderService::value_to_decimal(row.get(2)?);
+        //             let remain_volume = OrderService::value_to_decimal(row.get(3)?);
+        //             Ok((
+        //                 row.get::<_, i32>(0)?,              // trade_nid
+        //                 row.get::<_, i32>(1)?,              // order_nid
+        //                 alloc_volume,          // alloc_volume
+        //                 remain_volume,          // remain_volume
+        //                 row.get::<_, i32>(4)?,              // type
+        //             ))
+        //         })?;
+
+        //         println!("[JOB] trade iter...");
+        //         for r in rows {
+        //             let (t, o, alloc, remain, kind) = r?;
+        //             if kind == 1 {
+        //                 full.push((t, o));
+        //                 // snapshot.conn().execute(
+        //                 //     "UPDATE broker_trx_temp SET b_trade_nid = ? WHERE order_nid = ? AND trx_mode = 2",
+        //                 //     duckdb::params![t, o],
+        //                 // )?;
+        //             } else {
+        //                 // snapshot.conn().execute(
+        //                 //     "UPDATE broker_trx_temp SET b_trade_nid = ? WHERE order_nid = ? AND trx_mode = 2",
+        //                 //     duckdb::params![t, o],
+        //                 // )?;
+        //                 partial.push(PartialMatch {
+        //                     trade_nid: t,
+        //                     order_nid: o,
+        //                     alloc_volume: alloc,
+        //                     remain_volume: remain,
+        //                 });
+        //             }
+        //         }
+
+        //         let _ = repo_clone.update_ctx_temp(&snapshot);
+        //         println!("[JOB] ctx update done");
+
+        //         let done_order = repo_clone.get_order_done_from_snapshot(&snapshot).map_err(|err| println!("Err: {}", err)).unwrap();
+        //         let btx_done = repo_clone.get_broker_trx_done(&snapshot).map_err(|err| println!("Err: {}", err)).unwrap();
+
+        //         println!("[JOB] btx update done {}", btx_done.len());
+
+
+        //         Ok(MatchResult { full_trade: full, partial, order_done: done_order })
+        //     });
+
+        //     let result = handle.await.unwrap();
+
+        //     match result {
+        //         Ok(result) => {
+        //             println!("Order match started {:?}", start.elapsed());
+                    
+        //             let match_result = repo.match_orders_async(result).await;
+
+        //             match match_result {
+        //                 Ok(_) => {
+        //                     println!("Match async job finished {:?}", start.elapsed())
+        //                 },
+        //                 Err(e) => println!("Error: {}", e),
+        //             }
+        //         },
+        //         Err(e) => println!("Error: {}", e),
+        //     }
+
+        //  });
         tokio::spawn(async move {
-            let result = repo.match_orders_async().await;
+            let repo_clone = repo.clone();
+
+            let handle = tokio::task::spawn_blocking(move || -> Result<MatchResult> {
+                let snapshot = SnapshotDb::new()?;
+
+                // temp tables
+                repo_clone.create_btx_temp(&snapshot)?;
+                repo_clone.create_ctx_temp(&snapshot)?;
+                repo_clone.create_alloc_temp(&snapshot)?;
+
+                // ===============================
+                // 1️⃣ CREATE MATCH RESULT (SET-BASED)
+                // ===============================
+                snapshot.conn().execute(r#"
+                    CREATE TEMP TABLE match_result AS
+                    SELECT
+                        t.trade_nid,
+                        a.order_nid,
+                        a.alloc_volume,
+                        t.trade_volume - a.alloc_volume AS remain_volume,
+                        CASE
+                            WHEN a.alloc_volume = t.trade_volume THEN 1
+                            ELSE 2
+                        END AS match_type
+                    FROM read_parquet('snapshot_trade.parquet') t
+                    JOIN alloc_temp a
+                        ON a.trade_nid = t.trade_nid
+                    WHERE a.alloc_volume > 0
+                "#, [])?;
+
+                // ===============================
+                // 2️⃣ UPDATE broker_trx_temp (CEPET)
+                // ===============================
+                snapshot.conn().execute(r#"
+                    UPDATE broker_trx_temp bt
+                    SET b_trade_nid = m.trade_nid
+                    FROM match_result m
+                    WHERE m.order_nid = bt.order_nid
+                    AND bt.trx_mode = 2
+                "#, [])?;
+
+                // ===============================
+                // 3️⃣ UPDATE client_trx_temp (DONE VOLUME)
+                // ===============================
+                snapshot.conn().execute(r#"
+                    UPDATE client_trx_temp ct
+                    SET done_volume = x.done_volume
+                    FROM (
+                        SELECT
+                            order_nid,
+                            SUM(alloc_volume) AS done_volume
+                        FROM match_result
+                        GROUP BY order_nid
+                    ) x
+                    WHERE x.order_nid = ct.order_nid
+                "#, [])?;
+
+                // ===============================
+                // 4️⃣ BUILD RESULT FOR POSTGRES
+                // ===============================
+                let mut full = Vec::new();
+                let mut partial = Vec::new();
+
+                let mut stmt = snapshot.conn().prepare(r#"
+                    SELECT trade_nid, order_nid, alloc_volume, remain_volume, match_type
+                    FROM match_result
+                "#)?;
+
+                let rows = stmt.query_map([], |row| {
+                    Ok((
+                        row.get::<_, i32>(0)?,
+                        row.get::<_, i32>(1)?,
+                        OrderService::value_to_decimal(row.get(2)?),
+                        OrderService::value_to_decimal(row.get(3)?),
+                        row.get::<_, i32>(4)?,
+                    ))
+                })?;
+
+                for r in rows {
+                    let (t, o, alloc, remain, kind) = r?;
+                    if kind == 1 {
+                        full.push((t, o));
+                    } else {
+                        partial.push(PartialMatch {
+                            trade_nid: t,
+                            order_nid: o,
+                            alloc_volume: alloc,
+                            remain_volume: remain,
+                        });
+                    }
+                }
+
+                // ===============================
+                // 5️⃣ ORDER DONE (DuckDB → Rust)
+                // ===============================
+                let mut order_done = Vec::new();
+                let mut stmt = snapshot.conn().prepare(r#"
+                    SELECT order_nid, SUM(alloc_volume) AS done_volume
+                    FROM alloc_temp
+                    WHERE alloc_volume > 0
+                    GROUP BY order_nid
+                "#)?;
+
+                let rows = stmt.query_map([], |row| {
+                    Ok(OrderDone {
+                        order_nid: row.get(0)?,
+                        done_volume: row.get(1)?,
+                    })
+                })?;
+
+                for r in rows {
+                    order_done.push(r?);
+                }
+
+                let btx_done = repo_clone.get_broker_trx_done(&snapshot).map_err(|err| println!("Err: {}", err)).unwrap();
+
+                println!("Broker trx done: {}", btx_done.len());
+
+                Ok(MatchResult {
+                    full_trade: full,
+                    partial,
+                    order_done,
+                })
+            });
+
+            let result = handle.await.unwrap();
+
             match result {
-                Ok(res) => println!("Match async job finished {}", res),
+                Ok(result) => {
+                    println!("DuckDB done in {:?}", start.elapsed());
+                    let _ = repo.match_orders_async(result).await;
+                    println!("All done in {:?}", start.elapsed());
+                }
                 Err(e) => println!("Error: {}", e),
             }
         });
 
         Ok("Match async job started".to_string())
+    }
+
+    fn value_to_decimal(v: duckdb::types::Value) -> Decimal {
+        match v {
+            duckdb::types::Value::Decimal(value) => {
+                Decimal::from(value)
+            }
+            _ => panic!("unexpected type"),
+        }
     }
 
 }

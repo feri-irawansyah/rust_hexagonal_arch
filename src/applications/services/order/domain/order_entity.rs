@@ -99,3 +99,44 @@ pub struct ProcessingConfig {
     pub ip_address: String,
     pub computer_name: String,
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct PartialMatch {
+    pub trade_nid: i32,
+    pub order_nid: i32,
+    pub alloc_volume: Decimal,
+    pub remain_volume: Decimal,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MatchResult {
+    pub full_trade: Vec<(i32, i32)>, // trade_nid, order_nid
+    pub partial: Vec<PartialMatch>,
+    pub order_done: Vec<OrderDone>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct OrderDone {
+    pub order_nid: i32,
+    pub done_volume: i32,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct BrokerTrxInsert {
+    pub broker_nid: i32,
+    pub broker_trx_n_type: i32,
+    pub buy_sell: String,
+    pub stock_nid: Option<i32>,
+    pub trade_nid: Option<i32>,
+    pub due_date: Option<chrono::NaiveDateTime>,
+    pub settlement_mode: Option<i32>,
+    pub commission_percent: Option<Decimal>,
+    pub buy_commission_percent: Option<Decimal>,
+    pub sell_commission_percent: Option<Decimal>,
+    pub minimum_fee: Option<Decimal>,
+    pub buy_minimum_fee: Option<Decimal>,
+    pub sell_minimum_fee: Option<Decimal>,
+    pub order_nid: Option<i32>,
+    pub buy_amount: Option<Decimal>,
+    pub sell_amount: Option<Decimal>,
+}
