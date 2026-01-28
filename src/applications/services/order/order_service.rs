@@ -1,6 +1,6 @@
 use std::{str::FromStr, sync::Arc};
 use anyhow::Result;
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, prelude::FromPrimitive};
 use tokio::{sync::mpsc, time::Instant};
 
 use crate::{
@@ -48,6 +48,8 @@ impl OrderService {
                 ("client_commission_trx", None),
                 ("trx_type_match", None),
                 ("trx_type", None),
+                ("mv_temp_broker_trx", None),
+                ("mv_temp_client_trx", None),
             ];
 
             for (table, where_clause) in tables {
@@ -201,110 +203,18 @@ impl OrderService {
         let repo = self.repo.clone();
         let start = Instant::now();
         
-        // let snapshot = SnapshotDb::new().unwrap();
-        // tokio::spawn(async move { 
-        //     let repo_clone = repo.clone();
-        //     let handle = tokio::task::spawn_blocking(move || -> Result<MatchResult> {
-        //         repo_clone.create_btx_temp(&snapshot)?;
-        //         repo_clone.create_ctx_temp(&snapshot)?;
-        //         repo_clone.create_alloc_temp(&snapshot)?;
-
-        //         let query = r#"
-        //             SELECT
-        //                 t.trade_nid,
-        //                 a.order_nid,
-        //                 a.alloc_volume,
-        //                 t.trade_volume - a.alloc_volume AS remain_volume,
-        //                 CASE
-        //                     WHEN a.alloc_volume = t.trade_volume THEN 1
-        //                     ELSE 2
-        //                 END AS match_type
-        //             FROM read_parquet('snapshot_trade.parquet') t
-        //             JOIN alloc_temp a
-        //                 ON a.trade_nid = t.trade_nid
-        //             WHERE a.alloc_volume > 0;
-        //         "#;
-
-        //         let mut full = Vec::new();
-        //         let mut partial = Vec::new();
-
-        //         let mut stmt = snapshot.conn().prepare(query)?;
-        //         let rows = stmt.query_map([], |row| {
-        //             let alloc_volume = OrderService::value_to_decimal(row.get(2)?);
-        //             let remain_volume = OrderService::value_to_decimal(row.get(3)?);
-        //             Ok((
-        //                 row.get::<_, i32>(0)?,              // trade_nid
-        //                 row.get::<_, i32>(1)?,              // order_nid
-        //                 alloc_volume,          // alloc_volume
-        //                 remain_volume,          // remain_volume
-        //                 row.get::<_, i32>(4)?,              // type
-        //             ))
-        //         })?;
-
-        //         println!("[JOB] trade iter...");
-        //         for r in rows {
-        //             let (t, o, alloc, remain, kind) = r?;
-        //             if kind == 1 {
-        //                 full.push((t, o));
-        //                 // snapshot.conn().execute(
-        //                 //     "UPDATE broker_trx_temp SET b_trade_nid = ? WHERE order_nid = ? AND trx_mode = 2",
-        //                 //     duckdb::params![t, o],
-        //                 // )?;
-        //             } else {
-        //                 // snapshot.conn().execute(
-        //                 //     "UPDATE broker_trx_temp SET b_trade_nid = ? WHERE order_nid = ? AND trx_mode = 2",
-        //                 //     duckdb::params![t, o],
-        //                 // )?;
-        //                 partial.push(PartialMatch {
-        //                     trade_nid: t,
-        //                     order_nid: o,
-        //                     alloc_volume: alloc,
-        //                     remain_volume: remain,
-        //                 });
-        //             }
-        //         }
-
-        //         let _ = repo_clone.update_ctx_temp(&snapshot);
-        //         println!("[JOB] ctx update done");
-
-        //         let done_order = repo_clone.get_order_done_from_snapshot(&snapshot).map_err(|err| println!("Err: {}", err)).unwrap();
-        //         let btx_done = repo_clone.get_broker_trx_done(&snapshot).map_err(|err| println!("Err: {}", err)).unwrap();
-
-        //         println!("[JOB] btx update done {}", btx_done.len());
-
-
-        //         Ok(MatchResult { full_trade: full, partial, order_done: done_order })
-        //     });
-
-        //     let result = handle.await.unwrap();
-
-        //     match result {
-        //         Ok(result) => {
-        //             println!("Order match started {:?}", start.elapsed());
-                    
-        //             let match_result = repo.match_orders_async(result).await;
-
-        //             match match_result {
-        //                 Ok(_) => {
-        //                     println!("Match async job finished {:?}", start.elapsed())
-        //                 },
-        //                 Err(e) => println!("Error: {}", e),
-        //             }
-        //         },
-        //         Err(e) => println!("Error: {}", e),
-        //     }
-
-        //  });
         tokio::spawn(async move {
             let repo_clone = repo.clone();
 
+            let snapshot = SnapshotDb::new().unwrap();
             let handle = tokio::task::spawn_blocking(move || -> Result<MatchResult> {
-                let snapshot = SnapshotDb::new()?;
-
                 // temp tables
-                repo_clone.create_btx_temp(&snapshot)?;
-                repo_clone.create_ctx_temp(&snapshot)?;
+                // repo_clone.create_btx_temp(&snapshot)?;
+                // println!("[JOB] Temp Broker Trx created {:?}", start.elapsed());
+                // repo_clone.create_ctx_temp(&snapshot)?;
+                // println!("[JOB] Temp Client Trx created {:?}", start.elapsed());
                 repo_clone.create_alloc_temp(&snapshot)?;
+                println!("[JOB] Temp Alloc created {:?}", start.elapsed());
 
                 // ===============================
                 // 1️⃣ CREATE MATCH RESULT (SET-BASED)
@@ -327,33 +237,6 @@ impl OrderService {
                 "#, [])?;
 
                 // ===============================
-                // 2️⃣ UPDATE broker_trx_temp (CEPET)
-                // ===============================
-                snapshot.conn().execute(r#"
-                    UPDATE broker_trx_temp bt
-                    SET b_trade_nid = m.trade_nid
-                    FROM match_result m
-                    WHERE m.order_nid = bt.order_nid
-                    AND bt.trx_mode = 2
-                "#, [])?;
-
-                // ===============================
-                // 3️⃣ UPDATE client_trx_temp (DONE VOLUME)
-                // ===============================
-                snapshot.conn().execute(r#"
-                    UPDATE client_trx_temp ct
-                    SET done_volume = x.done_volume
-                    FROM (
-                        SELECT
-                            order_nid,
-                            SUM(alloc_volume) AS done_volume
-                        FROM match_result
-                        GROUP BY order_nid
-                    ) x
-                    WHERE x.order_nid = ct.order_nid
-                "#, [])?;
-
-                // ===============================
                 // 4️⃣ BUILD RESULT FOR POSTGRES
                 // ===============================
                 let mut full = Vec::new();
@@ -368,8 +251,18 @@ impl OrderService {
                     Ok((
                         row.get::<_, i32>(0)?,
                         row.get::<_, i32>(1)?,
-                        OrderService::value_to_decimal(row.get(2)?),
-                        OrderService::value_to_decimal(row.get(3)?),
+                        match row.get::<_, i32>(2) {
+                            Ok(v) => {
+                                rust_decimal::Decimal::from_i32(v).unwrap_or_default()
+                            },
+                            Err(_) => rust_decimal::Decimal::ZERO,
+                        },
+                        match row.get::<_, i32>(3) {
+                            Ok(v) => {
+                                rust_decimal::Decimal::from_i32(v).unwrap_or_default()
+                            },
+                            Err(_) => rust_decimal::Decimal::ZERO,
+                        },
                         row.get::<_, i32>(4)?,
                     ))
                 })?;
@@ -410,10 +303,6 @@ impl OrderService {
                     order_done.push(r?);
                 }
 
-                let btx_done = repo_clone.get_broker_trx_done(&snapshot).map_err(|err| println!("Err: {}", err)).unwrap();
-
-                println!("Broker trx done: {}", btx_done.len());
-
                 Ok(MatchResult {
                     full_trade: full,
                     partial,
@@ -434,15 +323,6 @@ impl OrderService {
         });
 
         Ok("Match async job started".to_string())
-    }
-
-    fn value_to_decimal(v: duckdb::types::Value) -> Decimal {
-        match v {
-            duckdb::types::Value::Decimal(value) => {
-                Decimal::from(value)
-            }
-            _ => panic!("unexpected type"),
-        }
     }
 
 }
