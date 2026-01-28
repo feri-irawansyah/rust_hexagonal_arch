@@ -1341,7 +1341,7 @@ impl TOrderRepository for OrderRepository {
 
         out
     }
-
+ 
     async fn copy_btx_to_postgres(&self, tx: &tokio_postgres::Transaction<'_>, rows: &[BrokerTrxInsert]) -> anyhow::Result<()> {
         println!("copying {} rows to broker_trx", rows.len());
         
