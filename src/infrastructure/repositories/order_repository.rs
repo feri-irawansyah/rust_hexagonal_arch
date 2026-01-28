@@ -1285,7 +1285,7 @@ impl TOrderRepository for OrderRepository {
         
         out
     }
-
+      
     fn build_insert_ctx_rows(&self, tmp: Vec<ClientTrxTmp>, trade_map: &HashMap<i32, TradeMatched>) -> Vec<ClientTrxInsert> {
 
         let mut out = Vec::with_capacity(tmp.len());
