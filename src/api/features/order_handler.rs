@@ -36,3 +36,10 @@ pub async fn load_match_data(service: web::Data<AppService>) -> HttpResponse {
         Err(e) => HttpResponse::InternalServerError().body(format!("Error: {}", e)),
     }
 }
+
+pub async fn insert_sales(service: web::Data<AppService>) -> HttpResponse {
+    match service.order_service.insert_sales().await {
+        Ok(_) => HttpResponse::Ok().body("Sales inserted"),
+        Err(e) => HttpResponse::InternalServerError().body(format!("Error: {}", e)),
+    }
+}

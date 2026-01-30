@@ -1,14 +1,13 @@
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
-use std::{collections::HashMap, pin::pin, str::FromStr};
+use std::{collections::HashMap, pin::pin};
 use anyhow::Result;
 use deadpool_postgres::Pool;
 use rust_decimal::{Decimal, prelude::FromPrimitive};
 
 use crate::{applications::{
     contracts::order_trait::TOrderRepository, services::order::domain::order_entity::{
-        BrokerTrxConfig, BrokerTrxEntity, BrokerTrxInsert, BrokerTrxInsertOld, BrokerTrxState, BrokerTrxTmp, ClientTrxInsert, ClientTrxState, ClientTrxTmp, MatchResult, OrderDone, OrderEntity, PartialMatch, ProcessingConfig, TradeMatched
+        BrokerTrxConfig, BrokerTrxEntity, BrokerTrxInsert, BrokerTrxInsertOld, BrokerTrxState, BrokerTrxTmp, ClientTrxInsert, ClientTrxState, ClientTrxTmp, MatchResult, OrderDone, OrderEntity, PartialMatch, ProcessingConfig, SalesPerson, TradeMatched
     }
 }, infrastructure::database::snapshot::SnapshotDb};
 
@@ -39,7 +38,7 @@ impl TOrderRepository for OrderRepository {
         Ok(result)
     }
 
-    async fn match_orders(&self, config: &ProcessingConfig, order: &OrderEntity, btx: &mut BrokerTrxState, ctrx: & mut ClientTrxState,  order_ids: &[i32]) -> Result<()> {
+    async fn match_orders(&self, config: &ProcessingConfig, order: &OrderEntity, btx: &mut BrokerTrxState, _ctrx: & mut ClientTrxState,  order_ids: &[i32]) -> Result<()> {
         let mut conn = self.conn.get().await?;
         let mut tx = conn.transaction().await?;
 
@@ -464,56 +463,6 @@ impl TOrderRepository for OrderRepository {
             let mut btx_temp_block = Vec::new();
             let mut ctx_temp_block = Vec::new();
 
-            // while let Some(row) = rows_btx.next().unwrap() {
-            //     btx_temp_block.push(BrokerTrxTmp {
-            //         order_nid: row.get(0).unwrap_or_default(),
-            //         broker_nid: row.get(1).unwrap_or_default(),
-            //         broker_trx_n_type: row.get(2).unwrap_or_default(),
-            //         b_buy_sell: row.get::<_, String>(3).unwrap_or_default().chars().next().unwrap(),
-            //         b_stock_nid: row.get(4).unwrap_or_default(),
-            //         b_trade_nid: row.get(5).unwrap_or_default(),
-            //         buy_volume: row.get(6).unwrap_or_default(),
-            //         sell_volume: row.get(7).unwrap_or_default(),
-            //         due_date: row.get::<_, NaiveDate>(8).unwrap_or_default(),
-            //         settlement_mode: row.get(9).unwrap_or_default(),
-            //         commission_percent: match row.get::<_, usize>(10) {
-            //             Ok(v) => {
-            //                 rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-            //             },
-            //             Err(_) => rust_decimal::Decimal::ZERO,
-            //         },
-            //         buy_commission_percent: match row.get::<_, usize>(11) {
-            //             Ok(v) => {
-            //                 rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-            //             },
-            //             Err(_) => rust_decimal::Decimal::ZERO,
-            //         },
-            //         sell_commission_percent: match row.get::<_, usize>(12) {
-            //             Ok(v) => {
-            //                 rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-            //             },
-            //             Err(_) => rust_decimal::Decimal::ZERO,
-            //         },
-            //         minimum_fee: match row.get::<_, usize>(13) {
-            //             Ok(v) => {
-            //                 rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-            //             },
-            //             Err(_) => rust_decimal::Decimal::ZERO,
-            //         },
-            //         buy_minimum_fee: match row.get::<_, usize>(14) {
-            //             Ok(v) => {
-            //                 rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-            //             },
-            //             Err(_) => rust_decimal::Decimal::ZERO,
-            //         },
-            //         sell_minimum_fee: match row.get::<_, usize>(15) {
-            //             Ok(v) => {
-            //                 rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-            //             },
-            //             Err(_) => rust_decimal::Decimal::ZERO,
-            //         },
-            //     });
-            // }
             while let Some(row) = rows_btx.next()? {
                 let order_nids_str: String = row.get(15).unwrap_or_default();
                 let order_nids: Vec<i32> = order_nids_str
@@ -527,16 +476,16 @@ impl TOrderRepository for OrderRepository {
                     b_buy_sell: row.get::<_, String>(2)?.chars().next().unwrap_or(' '),
                     b_stock_nid: row.get(3).unwrap_or_default(),
                     b_trade_nid: row.get(4).unwrap_or_default(),
-                    total_buy_volume: row.get(5).unwrap_or_default(),
-                    total_sell_volume: row.get(6).unwrap_or_default(),
-                    due_date: row.get(7).unwrap_or_default(),
-                    settlement_mode: row.get(8).unwrap_or_default(),
-                    commission_percent: Decimal::from_usize(row.get(9).unwrap_or_default()).unwrap_or_default(),
-                    buy_commission_percent: Decimal::from_usize(row.get(10)?).unwrap_or_default(),
-                    sell_commission_percent: Decimal::from_usize(row.get(11)?).unwrap_or_default(),
-                    minimum_fee: Decimal::from_usize(row.get(12)?).unwrap_or_default(),
-                    buy_minimum_fee: Decimal::from_usize(row.get(13)?).unwrap_or_default(),
-                    sell_minimum_fee: Decimal::from_usize(row.get(14)?).unwrap_or_default(),
+                    due_date: row.get(5).unwrap_or_default(),
+                    settlement_mode: row.get(6).unwrap_or_default(),
+                    commission_percent: Decimal::from_usize(row.get(7).unwrap_or_default()).unwrap_or_default(),
+                    buy_commission_percent: Decimal::from_usize(row.get(8)?).unwrap_or_default(),
+                    sell_commission_percent: Decimal::from_usize(row.get(9)?).unwrap_or_default(),
+                    minimum_fee: Decimal::from_usize(row.get(10)?).unwrap_or_default(),
+                    buy_minimum_fee: Decimal::from_usize(row.get(11)?).unwrap_or_default(),
+                    sell_minimum_fee: Decimal::from_usize(row.get(12)?).unwrap_or_default(),
+                    total_buy_volume: row.get(13).unwrap_or_default(),
+                    total_sell_volume: row.get(14).unwrap_or_default(),
                     order_nids,
                 });
             }
@@ -544,169 +493,130 @@ impl TOrderRepository for OrderRepository {
             let mut stmt_ctx = snapshot.conn().prepare(
                 r#"
                 select
-                    client_nid,
-                    client_trx_n_type,
-                    c_buy_sell,
-                    c_stock_nid,
-                    c_order_nid,
-                    c_buy_avg_price,
-                    c_sell_avg_price,
-                    buy_volume,
-                    sell_volume,
-                    levy_percent,
-                    sinking_fund_percent,
-                    income_tax_percent,
-                    due_date,
-                    c_settlement_mode,
-                    sales_person_nid,
-                    office_nid,
-                    referral_nid,
-                    sell_minimum_fee,
-                    wht_percent,
-                    referral_as_expense,
-                    day_trade,
-                    online_trading,
-                    force_buy_sell,
-                    stamp_duty_as_expense,
-                    exclude_stamp_duty_from_proceed_amount
-                from client_trx_temp  
+                    ct.client_nid,
+                    ct.client_trx_n_type,
+                    ct.c_buy_sell,
+                    ct.c_stock_nid,
+                    ct.c_order_nid,
+                    ct.c_buy_avg_price,
+                    ct.c_sell_avg_price,
+                    sum(ct.buy_volume) as buy_volume,
+                    sum(ct.sell_volume) as sell_volume,
+                    ct.due_date,
+                    ct.c_settlement_mode,
+                    ct.sales_person_nid,
+                    ct.office_nid,
+                    ct.referral_nid,
+                    ct.commission_mode,
+                    ct.commission_percent,
+                    ct.buy_commission_percent,
+                    ct.sell_commission_percent,
+                    ct.vat_percent,
+                    ct.minimum_fee,
+                    ct.buy_minimum_fee,
+                    ct.sell_minimum_fee,
+                    ct.wht_percent,
+                    ct.referral_as_expense,
+                    ct.day_trade,
+                    ct.online_trading,
+                    ct.force_buy_sell,
+                    ct.stamp_duty_as_expense,
+                    ct.exclude_stamp_duty_from_proceed_amount,
+                    group_concat(ct.levy_percent) as levy_percents,
+                    group_concat(ct.sinking_fund_percent) as sinking_fund_percents,
+                    group_concat(ct.income_tax_percent) as income_tax_percents,
+                    group_concat(ct.order_nid) as order_nids
+                from client_trx_temp  ct
                 group by
-                    buy_volume,
-                    sell_volume,
-                    levy_percent,
-                    sinking_fund_percent,
-                    income_tax_percent,
-                    client_nid,
-                    client_trx_n_type,
-                    c_buy_sell,
-                    c_stock_nid,
-                    c_order_nid,
-                    c_buy_avg_price,
-                    c_sell_avg_price,
-                    due_date,
-                    c_settlement_mode,
-                    sales_person_nid,
-                    office_nid,
-                    referral_nid,
-                    commission_mode,
-                    commission_percent,
-                    buy_commission_percent,
-                    sell_commission_percent,
-                    vat_percent,
-                    minimum_fee,
-                    buy_minimum_fee,
-                    sell_minimum_fee,
-                    wht_percent,
-                    referral_as_expense,
-                    day_trade,
-                    online_trading,
-                    force_buy_sell,
-                    stamp_duty_as_expense,
-                    exclude_stamp_duty_from_proceed_amount;
+                    ct.client_nid,
+                    ct.client_trx_n_type,
+                    ct.c_buy_sell,
+                    ct.c_stock_nid,
+                    ct.c_order_nid,
+                    ct.c_buy_avg_price,
+                    ct.c_sell_avg_price,
+                    ct.due_date,
+                    ct.c_settlement_mode,
+                    ct.sales_person_nid,
+                    ct.office_nid,
+                    ct.referral_nid,
+                    ct.commission_mode,
+                    ct.commission_percent,
+                    ct.buy_commission_percent,
+                    ct.sell_commission_percent,
+                    ct.vat_percent,
+                    ct.minimum_fee,
+                    ct.buy_minimum_fee,
+                    ct.sell_minimum_fee,
+                    ct.wht_percent,
+                    ct.referral_as_expense,
+                    ct.day_trade,
+                    ct.online_trading,
+                    ct.force_buy_sell,
+                    ct.stamp_duty_as_expense,
+                    ct.exclude_stamp_duty_from_proceed_amount;
                 "#
             ).unwrap();
 
             let mut rows_ctx = stmt_ctx.query([]).unwrap();
 
             while let Some(row) = rows_ctx.next().unwrap() {
+                
+                let levy_percent_str: String = row.get(29).unwrap_or_default();
+                let levy_percents: Vec<Decimal> = levy_percent_str
+                    .split(',')
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+                let sinking_fund_percent_str: String = row.get(30).unwrap_or_default();
+                let sinking_fund_percents: Vec<Decimal> = sinking_fund_percent_str
+                    .split(',')
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+                let income_tax_percent_str: String = row.get(31).unwrap_or_default();
+                let income_tax_percents: Vec<Decimal> = income_tax_percent_str
+                    .split(',')
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+                let order_nid_str: String = row.get(32).unwrap_or_default();
+                let order_nids: Vec<i32> = order_nid_str
+                    .split(',')
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+                
                 ctx_temp_block.push(ClientTrxTmp { 
                     client_nid: row.get(0).unwrap_or_default(), 
                     client_trx_n_type: row.get(1).unwrap_or_default(), 
-                    c_buy_sell: row.get::<_, String>(2).unwrap_or_default().chars().next().unwrap(),
+                    c_buy_sell: row.get::<_, String>(2)?.chars().next().unwrap_or(' '), 
                     c_stock_nid: row.get(3).unwrap_or_default(), 
                     c_order_nid: row.get(4).unwrap_or_default(), 
-                    c_buy_avg_price: match row.get::<_, usize>(5) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    c_sell_avg_price: match row.get::<_, usize>(6) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
+                    c_buy_avg_price: Decimal::from_usize(row.get(5).unwrap_or_default()).unwrap_or_default(), 
+                    c_sell_avg_price: Decimal::from_usize(row.get(6).unwrap_or_default()).unwrap_or_default(), 
                     buy_volume: row.get(7).unwrap_or_default(), 
                     sell_volume: row.get(8).unwrap_or_default(), 
-                    levy_percent: match row.get::<_, usize>(9) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    sinking_fund_percent: match row.get::<_, usize>(10) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    income_tax_percent: match row.get::<_, usize>(11) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    due_date: row.get::<_, NaiveDate>(12).unwrap_or_default(), 
-                    c_settlement_mode: row.get(13).unwrap_or_default(), 
-                    sales_person_nid: row.get(14).unwrap_or_default(), 
-                    office_nid: row.get(15).unwrap_or_default(), 
-                    referral_nid: row.get(16).unwrap_or_default(), 
-                    commission_mode: row.get(17).unwrap_or_default(), 
-                    commission_percent: match row.get::<_, usize>(18) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    buy_commission_percent: match row.get::<_, usize>(19) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    sell_commission_percent: match row.get::<_, usize>(20) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    vat_percent: match row.get::<_, usize>(21) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    minimum_fee: match row.get::<_, usize>(22) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    buy_minimum_fee: match row.get::<_, usize>(23) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    sell_minimum_fee: match row.get::<_, usize>(24) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    wht_percent: match row.get::<_, usize>(25) {
-                        Ok(v) => {
-                            rust_decimal::Decimal::from_usize(v).unwrap_or_default()
-                        },
-                        Err(_) => rust_decimal::Decimal::ZERO,
-                    }, 
-                    referral_as_expense: row.get(26).unwrap_or_default(), 
-                    day_trade: row.get(27).unwrap_or_default(), 
-                    online_trading: row.get(28).unwrap_or_default(), 
-                    force_buy_sell: row.get(29).unwrap_or_default(), 
-                    stamp_duty_as_expense: row.get(30).unwrap_or_default(), 
-                    exclude_stamp_duty_from_proceed_amount: row.get(31).unwrap_or_default()
+                    due_date: row.get(9).unwrap_or_default(), 
+                    c_settlement_mode: row.get(10).unwrap_or_default(), 
+                    sales_person_nid: row.get(11).unwrap_or_default(), 
+                    office_nid: row.get(12).unwrap_or_default(), 
+                    referral_nid: row.get(13).unwrap_or_default(), 
+                    commission_mode: row.get(14).unwrap_or_default(), 
+                    commission_percent: Decimal::from_usize(row.get(15).unwrap_or_default()).unwrap_or_default(), 
+                    buy_commission_percent: Decimal::from_usize(row.get(16).unwrap_or_default()).unwrap_or_default(), 
+                    sell_commission_percent: Decimal::from_usize(row.get(17).unwrap_or_default()).unwrap_or_default(), 
+                    vat_percent: Decimal::from_usize(row.get(18).unwrap_or_default()).unwrap_or_default(), 
+                    minimum_fee: Decimal::from_usize(row.get(19).unwrap_or_default()).unwrap_or_default(), 
+                    buy_minimum_fee: Decimal::from_usize(row.get(20).unwrap_or_default()).unwrap_or_default(), 
+                    sell_minimum_fee: Decimal::from_usize(row.get(21).unwrap_or_default()).unwrap_or_default(), 
+                    wht_percent: Decimal::from_usize(row.get(22).unwrap_or_default()).unwrap_or_default(), 
+                    referral_as_expense: row.get(23).unwrap_or_default(), 
+                    day_trade: row.get(23).unwrap_or_default(), 
+                    online_trading: row.get(23).unwrap_or_default(), 
+                    force_buy_sell: row.get(23).unwrap_or_default(), 
+                    stamp_duty_as_expense: row.get(23).unwrap_or_default(), 
+                    exclude_stamp_duty_from_proceed_amount: row.get(23).unwrap_or_default(), 
+                    levy_percent: levy_percents, 
+                    sinking_fund_percent: sinking_fund_percents, 
+                    income_tax_percent: income_tax_percents,
+                    order_nids: order_nids,
                  });
             }
 
@@ -739,18 +649,20 @@ impl TOrderRepository for OrderRepository {
             &trade_map,
         );
 
+        println!("ctx rows: {}", ctx_rows.len());
+
         let copy_tx_result = self.copy_ctx_to_postgres(&mut tx, &ctx_rows).await;
 
         match copy_tx_result {
             Ok(_) =>  {
-                println!("Success cppy btx")
+                println!("Success cppy ctx")
             }, 
             Err(e) => {
-                println!("Failed to copy btx: {}", e);
+                println!("Failed to copy ctx: {:?}", e);
             }
         }
 
-        tx.rollback().await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -1197,49 +1109,6 @@ impl TOrderRepository for OrderRepository {
         Ok(map)
     }
 
-    // fn build_insert_btx_rows(&self, tmp: Vec<BrokerTrxTmp>, trade_map: &HashMap<i32, TradeMatched>) -> Vec<BrokerTrxInsert> {
-
-    //     let mut out = Vec::with_capacity(tmp.len());
-
-    //     println!("tmp len: {}, trade_map len: {}", tmp.len(), trade_map.len());
-
-    //     for bt in tmp {
-    //         if let Some(t) = trade_map.get(&bt.order_nid) {
-
-    //             let ap_amount = t.buy_amount;
-    //             let ar_amount = t.sell_amount;
-
-    //             out.push(BrokerTrxInsert {
-    //                 date: NaiveDate::from_str("2026-01-15").unwrap(),
-    //                 broker_nid: bt.broker_nid,
-    //                 broker_trx_n_type: bt.broker_trx_n_type,
-    //                 buy_sell: bt.b_buy_sell.to_string(),
-    //                 stock_nid: bt.b_stock_nid,
-    //                 trade_nid: bt.b_trade_nid,
-    //                 buy_volume: bt.buy_volume,
-    //                 sell_volume: bt.sell_volume,
-    //                 buy_amount: t.buy_amount,
-    //                 sell_amount: t.sell_amount,
-    //                 ar_amount,
-    //                 ap_amount,
-    //                 net_amount: ar_amount - ap_amount,
-    //                 due_date: bt.due_date,
-    //                 settlement_mode: bt.settlement_mode,
-    //                 commission_percent: bt.commission_percent,
-    //                 buy_commission_percent: bt.buy_commission_percent,
-    //                 sell_commission_percent: bt.sell_commission_percent,
-    //                 minimum_fee: bt.minimum_fee,
-    //                 buy_minimum_fee: bt.buy_minimum_fee,
-    //                 sell_minimum_fee: bt.sell_minimum_fee,
-    //                 entry_user_nid: 1,
-    //                 entry_ip_address: "".to_string(),
-    //                 entry_computer_name: "".to_string(),
-    //             });
-    //         }
-    //     }
-
-    //     out
-    // }
     fn build_insert_btx_rows(&self, aggregated: Vec<BrokerTrxTmp>, trade_map: &HashMap<i32, TradeMatched>) -> Vec<BrokerTrxInsert> {
         let mut out = Vec::new();
         
@@ -1256,7 +1125,10 @@ impl TOrderRepository for OrderRepository {
             }
             
             out.push(BrokerTrxInsert {
-                date: NaiveDate::from_str("2026-01-15").unwrap(),
+                date: chrono::NaiveDateTime::parse_from_str(
+                    "2026-01-15 00:00:00",
+                    "%Y-%m-%d %H:%M:%S"
+                ).unwrap(),
                 broker_nid: agg.broker_nid,
                 broker_trx_n_type: agg.broker_trx_n_type,
                 buy_sell: agg.b_buy_sell.to_string(),
@@ -1286,62 +1158,316 @@ impl TOrderRepository for OrderRepository {
         out
     }
       
-    fn build_insert_ctx_rows(&self, tmp: Vec<ClientTrxTmp>, trade_map: &HashMap<i32, TradeMatched>) -> Vec<ClientTrxInsert> {
+    fn build_insert_ctx_rows(&self, aggregated: Vec<ClientTrxTmp>, trade_map: &HashMap<i32, TradeMatched>) -> Vec<ClientTrxInsert> {
 
-        let mut out = Vec::with_capacity(tmp.len());
+        let mut out = Vec::with_capacity(aggregated.len());
+        
+        for agg in aggregated {
+            // Hitung total buy_amount dan sell_amount dari semua order_nid
+            let mut buy_amount_total = Decimal::ZERO;
+            let mut sell_amount_total = Decimal::ZERO;
 
-        println!("tmp len: {}, trade_map len: {}", tmp.len(), trade_map.len());
+            let mut levy_buy_total = Decimal::ZERO;
+            let mut levy_sell_total = Decimal::ZERO;
+            let mut sinking_buy_total = Decimal::ZERO;
+            let mut sinking_sell_total = Decimal::ZERO;
+            let mut income_tax_total = Decimal::ZERO;
 
-        for ct in tmp {
-            if let Some(t) = trade_map.get(&ct.c_order_nid) {
+            for i in 0..agg.order_nids.len() {
+                let order_nid = agg.order_nids[i];
 
-                out.push(ClientTrxInsert { 
-                    date:NaiveDate::from_str("2026-01-15").unwrap(),
-                    client_nid: ct.client_nid,
-                    client_trx_n_type: ct.client_trx_n_type,
-                    buy_sell: ct.c_buy_sell.to_string(),
-                    stock_nid: ct.c_stock_nid,
-                    order_nid: ct.c_order_nid,
-                    buy_avg_price: ct.c_buy_avg_price,
-                    sell_avg_price: ct.c_sell_avg_price,
-                    buy_volume: ct.buy_volume,
-                    sell_volume: ct.sell_volume,
-                    buy_amount: t.buy_amount,
-                    sell_amount: t.sell_amount,
-                    net_amount: t.buy_amount - t.sell_amount,
-                    due_date: ct.due_date,
-                    settlement_mode: ct.c_settlement_mode,
-                    sales_person_nid: ct.sales_person_nid,
-                    office_nid: ct.office_nid,
-                    referral_nid: ct.referral_nid,
-                    commission_mode: ct.commission_mode,
-                    commission_percent: ct.commission_percent,
-                    buy_commission_percent: ct.buy_commission_percent,
-                    sell_commission_percent: ct.sell_commission_percent,
-                    vat_percent: ct.vat_percent,
-                    minimum_fee: ct.minimum_fee,
-                    buy_minimum_fee: ct.buy_minimum_fee,
-                    sell_minimum_fee: ct.sell_minimum_fee,
-                    wht_percent: ct.wht_percent,
-                    referral_as_expense: ct.referral_as_expense,
-                    day_trade: ct.day_trade,
-                    online_trading: ct.online_trading,
-                    force_buy_sell: ct.force_buy_sell,
-                    stamp_duty_as_expense: ct.stamp_duty_as_expense,
-                    exclude_stamp_duty_from_proceed_amount: ct.exclude_stamp_duty_from_proceed_amount,
-                    entry_user_nid: 1,
-                    entry_ip_address: "".to_string(),
-                    entry_computer_name: "".to_string(), 
-                    levy_percent: ct.levy_percent, 
-                    sinking_fund_percent: ct.sinking_fund_percent, 
-                    income_tax_percent: ct.income_tax_percent, 
-                 });
+                if let Some(trade) = trade_map.get(&order_nid) {
+                    let buy = trade.buy_amount;
+                    let sell = trade.sell_amount;
+
+                    buy_amount_total += buy;
+                    sell_amount_total += sell;
+
+                    let levy = agg.levy_percent.get(i).copied().unwrap_or(Decimal::ZERO);
+                    let sinking = agg.sinking_fund_percent.get(i).copied().unwrap_or(Decimal::ZERO);
+                    let tax = agg.income_tax_percent.get(i).copied().unwrap_or(Decimal::ZERO);
+
+                    levy_buy_total += buy * levy;
+                    levy_sell_total += sell * levy;
+
+                    sinking_buy_total += buy * sinking;
+                    sinking_sell_total += sell * sinking;
+
+                    income_tax_total += sell * tax;
+                }
             }
+            
+            out.push(ClientTrxInsert { 
+                date: chrono::NaiveDateTime::parse_from_str(
+                    "2026-01-15 00:00:00",
+                    "%Y-%m-%d %H:%M:%S"
+                ).unwrap(), 
+                client_nid: agg.client_nid, 
+                client_trx_n_type: agg.client_trx_n_type, 
+                buy_sell: agg.c_buy_sell.to_string(), 
+                stock_nid: agg.c_stock_nid, 
+                order_nid: agg.c_order_nid, 
+                buy_avg_price: agg.c_buy_avg_price, 
+                sell_avg_price: agg.c_sell_avg_price, 
+                buy_volume: agg.buy_volume, 
+                sell_volume: agg.sell_volume, 
+                buy_levy_percent: levy_buy_total, 
+                sell_levy_percent: levy_sell_total, 
+                buy_sinking_fund_percent: sinking_buy_total, 
+                sell_sinking_fund_percent: sinking_sell_total, 
+                income_tax_percent: income_tax_total, 
+                buy_amount: buy_amount_total, 
+                sell_amount: sell_amount_total, 
+                net_amount: sell_amount_total - buy_amount_total, 
+                due_date: agg.due_date, 
+                settlement_mode: agg.c_settlement_mode, 
+                sales_person_nid: agg.sales_person_nid, 
+                office_nid: agg.office_nid, 
+                referral_nid: agg.referral_nid, 
+                commission_mode: agg.commission_mode, 
+                commission_percent: agg.commission_percent, 
+                buy_commission_percent: agg.buy_commission_percent, 
+                sell_commission_percent: agg.sell_commission_percent, 
+                vat_percent: agg.vat_percent, 
+                minimum_fee: agg.minimum_fee, 
+                buy_minimum_fee: agg.buy_minimum_fee, 
+                sell_minimum_fee: agg.sell_minimum_fee, 
+                wht_percent: agg.wht_percent, 
+                referral_as_expense: agg.referral_as_expense, 
+                day_trade: agg.day_trade, 
+                online_trading: agg.online_trading, 
+                force_buy_sell: agg.force_buy_sell, 
+                stamp_duty_as_expense: agg.stamp_duty_as_expense, 
+                exclude_stamp_duty_from_proceed_amount: agg.exclude_stamp_duty_from_proceed_amount, 
+                entry_user_nid: 1, 
+                entry_ip_address: "".to_string(), 
+                entry_computer_name: "".to_string(),
+             });
         }
 
         out
     }
  
+    async fn insert_btx_fast(&self, tx: &tokio_postgres::Transaction<'_>, rows: &[BrokerTrxInsert]) -> anyhow::Result<()> {
+
+        if rows.is_empty() {
+            return Ok(());
+        }
+
+        // ====== flatten ke vec per kolom ======
+        let dates: Vec<_> = rows.iter().map(|r| r.date).collect();
+        let broker_nids: Vec<_> = rows.iter().map(|r| r.broker_nid).collect();
+        let trx_types: Vec<_> = rows.iter().map(|r| r.broker_trx_n_type).collect();
+        let buy_sells: Vec<_> = rows.iter().map(|r| r.buy_sell.as_str()).collect();
+        let stock_nids: Vec<_> = rows.iter().map(|r| r.stock_nid).collect();
+        let trade_nids: Vec<_> = rows.iter().map(|r| r.trade_nid).collect();
+
+        let buy_amounts: Vec<_> = rows.iter().map(|r| r.buy_amount).collect();
+        let sell_amounts: Vec<_> = rows.iter().map(|r| r.sell_amount).collect();
+        let ar_amounts: Vec<_> = rows.iter().map(|r| r.ar_amount).collect();
+        let ap_amounts: Vec<_> = rows.iter().map(|r| r.ap_amount).collect();
+        let net_amounts: Vec<_> = rows.iter().map(|r| r.ar_amount - r.ap_amount).collect();
+
+        let due_dates: Vec<_> = rows.iter().map(|r| r.due_date).collect();
+        let settlement_modes: Vec<_> = rows.iter().map(|r| r.settlement_mode).collect();
+
+        let commission_percents: Vec<_> = rows.iter().map(|r| r.commission_percent).collect();
+        let buy_commission_percents: Vec<_> = rows.iter().map(|r| r.buy_commission_percent).collect();
+        let sell_commission_percents: Vec<_> = rows.iter().map(|r| r.sell_commission_percent).collect();
+
+        let minimum_fees: Vec<_> = rows.iter().map(|r| r.minimum_fee).collect();
+        let buy_minimum_fees: Vec<_> = rows.iter().map(|r| r.buy_minimum_fee).collect();
+        let sell_minimum_fees: Vec<_> = rows.iter().map(|r| r.sell_minimum_fee).collect();
+
+        let entry_user_nids: Vec<_> = rows.iter().map(|r| r.entry_user_nid).collect();
+        let entry_ips: Vec<_> = rows.iter().map(|r| r.entry_ip_address.as_str()).collect();
+        let entry_computers: Vec<_> = rows.iter().map(|r| r.entry_computer_name.as_str()).collect();
+
+        let entry_times: Vec<_> = rows
+            .iter()
+            .map(|_| chrono::Utc::now().naive_utc())
+            .collect();
+
+        // ====== SQL ======
+        let sql = r#"
+            INSERT INTO broker_trx (
+                date,
+                broker_nid,
+                broker_trx_n_type,
+                buy_sell,
+                stock_nid,
+                trade_nid,
+                buy_avg_price,
+                sell_avg_price,
+                buy_volume,
+                sell_volume,
+                buy_amount,
+                sell_amount,
+                buy_levy,
+                sell_levy,
+                buy_sinking_fund,
+                sell_sinking_fund,
+                income_tax,
+                buy_fee,
+                buy_vat,
+                buy_commission,
+                buy_wht,
+                buy_charge_amount1,
+                buy_charge_amount2,
+                buy_charge_amount3,
+                buy_charge_amount4,
+                buy_charge_amount5,
+                buy_charge_amount6,
+                buy_charge_amount7,
+                buy_charge_amount8,
+                buy_charge_amount9,
+                sell_fee,
+                sell_vat,
+                sell_commission,
+                sell_wht,
+                sell_charge_amount1,
+                sell_charge_amount2,
+                sell_charge_amount3,
+                sell_charge_amount4,
+                sell_charge_amount5,
+                sell_charge_amount6,
+                sell_charge_amount7,
+                sell_charge_amount8,
+                sell_charge_amount9,
+                ar_amount,
+                ap_amount,
+                net_amount,
+                cash_receive_date,
+                cash_payment_date,
+                stock_deliver_date,
+                stock_receive_date,
+                due_date,
+                settlement_mode,
+                commission_percent,
+                buy_commission_percent,
+                sell_commission_percent,
+                currency_nid,
+                currency_rate,
+                minimum_fee,
+                buy_minimum_fee,
+                sell_minimum_fee,
+                final,
+                checked,
+                approved,
+                rejected,
+                change_nid,
+                entry_user_nid,
+                entry_ip_address,
+                entry_computer_name,
+                entry_time
+            )
+            SELECT *
+            FROM UNNEST(
+                $1::DATE[],           
+                $2::INT4[],           
+                $3::INT2[],          
+                $4::VARCHAR[],        
+                $5::INT4[],           
+                $6::INT4[],          
+                $7::NUMERIC[],        
+                $8::NUMERIC[],        
+                $9::INT8[],           
+                $10::INT8[],          
+                $11::NUMERIC[],        
+                $12::NUMERIC[],       
+                $13::NUMERIC[],        
+                $14::NUMERIC[],       
+                $15::NUMERIC[],      
+                $16::NUMERIC[],        
+                $17::NUMERIC[],       
+                $18::NUMERIC[],        
+                $19::NUMERIC[],        
+                $20::NUMERIC[],        
+                $21::NUMERIC[],        
+                $22::NUMERIC[],        
+                $23::NUMERIC[],        
+                $24::NUMERIC[],        
+                $25::NUMERIC[],        
+                $26::NUMERIC[],        
+                $27::NUMERIC[],        
+                $28::NUMERIC[],        
+                $29::NUMERIC[],        
+                $30::NUMERIC[],        
+                $31::NUMERIC[],        
+                $32::NUMERIC[],        
+                $33::NUMERIC[],        
+                $34::NUMERIC[],       
+                $35::NUMERIC[],        
+                $36::NUMERIC[],        
+                $37::NUMERIC[],        
+                $38::NUMERIC[],        
+                $39::NUMERIC[],        
+                $40::NUMERIC[],        
+                $41::NUMERIC[],        
+                $42::NUMERIC[],        
+                $43::NUMERIC[],       
+                $44::NUMERIC[],        
+                $45::NUMERIC[],        
+                $46::NUMERIC[],        
+                $47::DATE[],           
+                $48::DATE[],          
+                $49::DATE[],           
+                $50::DATE[],           
+                $51::DATE[],           
+                $52::INT2[],           
+                $53::NUMERIC[],        
+                $54::NUMERIC[],        
+                $55::NUMERIC[],        
+                $56::INT4[],           
+                $57::NUMERIC[],        
+                $58::NUMERIC[],        
+                $59::NUMERIC[],        
+                $60::NUMERIC[],        
+                $61::BOOL[],          
+                $62::BOOL[],          
+                $63::BOOL[],           
+                $64::BOOL[],           
+                $65::INT4[],           
+                $66::INT4[],           
+                $67::VARCHAR[],        
+                $68::VARCHAR[],        
+                $69::TIMESTAMP[],      
+            )
+        "#;
+
+        tx.execute(
+            sql,
+            &[
+                &dates,
+                &broker_nids,
+                &trx_types,
+                &buy_sells,
+                &stock_nids,
+                &trade_nids,
+                &buy_amounts,
+                &sell_amounts,
+                &ar_amounts,
+                &ap_amounts,
+                &net_amounts,
+                &due_dates,
+                &settlement_modes,
+                &commission_percents,
+                &buy_commission_percents,
+                &sell_commission_percents,
+                &minimum_fees,
+                &buy_minimum_fees,
+                &sell_minimum_fees,
+                &entry_user_nids,
+                &entry_ips,
+                &entry_computers,
+                &entry_times,
+            ],
+        )
+        .await?;
+
+        Ok(())
+    }
+
     async fn copy_btx_to_postgres(&self, tx: &tokio_postgres::Transaction<'_>, rows: &[BrokerTrxInsert]) -> anyhow::Result<()> {
         println!("copying {} rows to broker_trx", rows.len());
         
@@ -1425,16 +1551,16 @@ impl TOrderRepository for OrderRepository {
         let writer = BinaryCopyInWriter::new(
             sink,
             &[
-                tokio_postgres::types::Type::DATE,           // 1. date
+                tokio_postgres::types::Type::TIMESTAMP,      // 1. date
                 tokio_postgres::types::Type::INT4,           // 2. broker_nid
-                tokio_postgres::types::Type::INT4,           // 3. broker_trx_n_type
-                tokio_postgres::types::Type::VARCHAR,           // 4. buy_sell
+                tokio_postgres::types::Type::INT4,           // 3. broker_trx_n_type (ubah ke INT4 karena di struct i32)
+                tokio_postgres::types::Type::VARCHAR,        // 4. buy_sell
                 tokio_postgres::types::Type::INT4,           // 5. stock_nid
                 tokio_postgres::types::Type::INT4,           // 6. trade_nid
                 tokio_postgres::types::Type::NUMERIC,        // 7. buy_avg_price
                 tokio_postgres::types::Type::NUMERIC,        // 8. sell_avg_price
-                tokio_postgres::types::Type::NUMERIC,        // 9. buy_volume
-                tokio_postgres::types::Type::NUMERIC,        // 10. sell_volume
+                tokio_postgres::types::Type::INT8,           // 9. buy_volume (ubah ke INT8 karena i64)
+                tokio_postgres::types::Type::INT8,           // 10. sell_volume (ubah ke INT8 karena i64)
                 tokio_postgres::types::Type::NUMERIC,        // 11. buy_amount
                 tokio_postgres::types::Type::NUMERIC,        // 12. sell_amount
                 tokio_postgres::types::Type::NUMERIC,        // 13. buy_levy
@@ -1471,17 +1597,17 @@ impl TOrderRepository for OrderRepository {
                 tokio_postgres::types::Type::NUMERIC,        // 44. ar_amount
                 tokio_postgres::types::Type::NUMERIC,        // 45. ap_amount
                 tokio_postgres::types::Type::NUMERIC,        // 46. net_amount
-                tokio_postgres::types::Type::DATE,           // 47. cash_receive_date
-                tokio_postgres::types::Type::DATE,           // 48. cash_payment_date
-                tokio_postgres::types::Type::DATE,           // 49. stock_deliver_date
-                tokio_postgres::types::Type::DATE,           // 50. stock_receive_date
-                tokio_postgres::types::Type::DATE,           // 51. due_date
-                tokio_postgres::types::Type::INT4,           // 52. settlement_mode
+                tokio_postgres::types::Type::TIMESTAMP,      // 47. cash_receive_date
+                tokio_postgres::types::Type::TIMESTAMP,      // 48. cash_payment_date
+                tokio_postgres::types::Type::TIMESTAMP,      // 49. stock_deliver_date
+                tokio_postgres::types::Type::TIMESTAMP,      // 50. stock_receive_date
+                tokio_postgres::types::Type::TIMESTAMP,      // 51. due_date
+                tokio_postgres::types::Type::INT4,           // 52. settlement_mode (ubah ke INT4 karena i32)
                 tokio_postgres::types::Type::NUMERIC,        // 53. commission_percent
                 tokio_postgres::types::Type::NUMERIC,        // 54. buy_commission_percent
                 tokio_postgres::types::Type::NUMERIC,        // 55. sell_commission_percent
                 tokio_postgres::types::Type::INT4,           // 56. currency_nid
-                tokio_postgres::types::Type::INT4,           // 57. minimum_fee
+                tokio_postgres::types::Type::NUMERIC,        // 57. currency_rate (ubah ke NUMERIC)
                 tokio_postgres::types::Type::NUMERIC,        // 58. minimum_fee
                 tokio_postgres::types::Type::NUMERIC,        // 59. buy_minimum_fee
                 tokio_postgres::types::Type::NUMERIC,        // 60. sell_minimum_fee
@@ -1493,17 +1619,16 @@ impl TOrderRepository for OrderRepository {
                 tokio_postgres::types::Type::INT4,           // 66. entry_user_nid
                 tokio_postgres::types::Type::VARCHAR,        // 67. entry_ip_address
                 tokio_postgres::types::Type::VARCHAR,        // 68. entry_computer_name
-                tokio_postgres::types::Type::TIMESTAMPTZ,    // 69. entry_time
+                tokio_postgres::types::Type::TIMESTAMP,      // 69. entry_time
             ],
         );
 
         let mut writer = pin!(writer);
 
         for r in rows {
-            // Hitung net_amount per row, bukan cumulative
-            let net_amount = r.ar_amount - r.ap_amount;
-            
-            writer.as_mut().write(&[
+            let entry_time = chrono::Utc::now().naive_utc();
+
+            let params:  Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![
                 &r.date,                                    // 1. date
                 &r.broker_nid,                              // 2. broker_nid
                 &r.broker_trx_n_type,                       // 3. broker_trx_n_type
@@ -1512,8 +1637,8 @@ impl TOrderRepository for OrderRepository {
                 &r.trade_nid,                               // 6. trade_nid
                 &Decimal::ZERO,                             // 7. buy_avg_price
                 &Decimal::ZERO,                             // 8. sell_avg_price
-                &r.buy_volume,                              // 9. buy_volume
-                &r.sell_volume,                             // 10. sell_volume
+                &r.buy_volume,                              // 9. buy_volume (konversi eksplisit)
+                &r.sell_volume,                             // 10. sell_volume (konversi eksplisit)
                 &r.buy_amount,                              // 11. buy_amount
                 &r.sell_amount,                             // 12. sell_amount
                 &Decimal::ZERO,                             // 13. buy_levy
@@ -1549,7 +1674,7 @@ impl TOrderRepository for OrderRepository {
                 &Decimal::ZERO,                             // 43. sell_charge_amount9
                 &r.ar_amount,                               // 44. ar_amount
                 &r.ap_amount,                               // 45. ap_amount
-                &net_amount,                                // 46. net_amount
+                &r.net_amount,                              // 46. net_amount
                 &r.due_date,                                // 47. cash_receive_date
                 &r.due_date,                                // 48. cash_payment_date
                 &r.due_date,                                // 49. stock_deliver_date
@@ -1559,8 +1684,8 @@ impl TOrderRepository for OrderRepository {
                 &r.commission_percent,                      // 53. commission_percent
                 &r.buy_commission_percent,                  // 54. buy_commission_percent
                 &r.sell_commission_percent,                 // 55. sell_commission_percent
-                &1,                                         // 56. currency_nid
-                &1,                                         // 57. currency_rate
+                &1i32,                                      // 56. currency_nid
+                &Decimal::ONE,                              // 57. currency_rate (ubah ke Decimal)
                 &r.minimum_fee,                             // 58. minimum_fee
                 &r.buy_minimum_fee,                         // 59. buy_minimum_fee
                 &r.sell_minimum_fee,                        // 60. sell_minimum_fee
@@ -1568,15 +1693,23 @@ impl TOrderRepository for OrderRepository {
                 &false,                                     // 62. checked
                 &false,                                     // 63. approved
                 &false,                                     // 64. rejected
-                &0,                                         // 65. change_nid
+                &0i32,                                      // 65. change_nid
                 &r.entry_user_nid,                          // 66. entry_user_nid
                 &r.entry_ip_address,                        // 67. entry_ip_address
                 &r.entry_computer_name,                     // 68. entry_computer_name
-                &chrono::Utc::now(),                        // 69. entry_time
-            ]).await?;
+                &entry_time,                                // 69. entry_time
+            ];
+            
+           writer.as_mut().write(&params).await?;
         }
 
-        writer.finish().await?;
+        match writer.as_mut().finish().await {
+            Ok(_) => (),
+            Err(e) => {
+                println!("Failed to insert finish broker_trx: {:?}", e);
+                return Err(anyhow::anyhow!(e))
+            },
+        }
         Ok(())
     }
 
@@ -1657,10 +1790,10 @@ impl TOrderRepository for OrderRepository {
                 approved,
                 rejected,
                 change_nid,
-                entry_time,
                 entry_user_nid,
                 entry_ip_address,
-                entry_computer_name
+                entry_computer_name,
+                entry_time
             )
             FROM STDIN (FORMAT BINARY)
             "#
@@ -1669,190 +1802,216 @@ impl TOrderRepository for OrderRepository {
         let writer = BinaryCopyInWriter::new(
             sink,
             &[
-                tokio_postgres::types::Type::DATE, //date
-                tokio_postgres::types::Type::INT8, //client_nid
-                tokio_postgres::types::Type::INT8, // client_trx_n_type
-                tokio_postgres::types::Type::CHAR, // buy_sell
-                tokio_postgres::types::Type::INT8, // stock_nid
-                tokio_postgres::types::Type::INT8, // order_nid
-                tokio_postgres::types::Type::NUMERIC, // buy_avg_price
-                tokio_postgres::types::Type::NUMERIC, // sell_avg_price
-                tokio_postgres::types::Type::NUMERIC, // buy_volume
-                tokio_postgres::types::Type::NUMERIC, // sell_volume
-                tokio_postgres::types::Type::NUMERIC, // buy_amount
-                tokio_postgres::types::Type::NUMERIC, // sell_amount
-                tokio_postgres::types::Type::NUMERIC, // buy_levy
-                tokio_postgres::types::Type::NUMERIC, // sell_levy
-                tokio_postgres::types::Type::NUMERIC, // buy_sinking_fund
-                tokio_postgres::types::Type::NUMERIC, // sell_sinking_fund
-                tokio_postgres::types::Type::NUMERIC, // income_tax
-                tokio_postgres::types::Type::NUMERIC, // buy_fee
-                tokio_postgres::types::Type::NUMERIC, // buy_vat
-                tokio_postgres::types::Type::NUMERIC, // buy_wapu_vat
-                tokio_postgres::types::Type::NUMERIC, // buy_wht
-                tokio_postgres::types::Type::NUMERIC, // buy_otc_fee
-                tokio_postgres::types::Type::NUMERIC, // buy_referral
-                tokio_postgres::types::Type::NUMERIC, // buy_other_charges
-                tokio_postgres::types::Type::NUMERIC, // sell_fee
-                tokio_postgres::types::Type::NUMERIC, // sell_vat
-                tokio_postgres::types::Type::NUMERIC, // sell_wapu_vat
-                tokio_postgres::types::Type::NUMERIC, // sell_wht
-                tokio_postgres::types::Type::NUMERIC, // sell_otc_fee
-                tokio_postgres::types::Type::NUMERIC, // sell_referral
-                tokio_postgres::types::Type::NUMERIC, // sell_other_charges
-                tokio_postgres::types::Type::NUMERIC, // ar_amount
-                tokio_postgres::types::Type::NUMERIC, // ap_amount
-                tokio_postgres::types::Type::NUMERIC, // net_amount
-                tokio_postgres::types::Type::DATE, // cash_receive_date
-                tokio_postgres::types::Type::DATE, // cash_payment_date
-                tokio_postgres::types::Type::DATE, // stock_deliver_date
-                tokio_postgres::types::Type::DATE, // stock_receive_date
-                tokio_postgres::types::Type::DATE, // ar_due_date
-                tokio_postgres::types::Type::DATE, // ap_due_date
-                tokio_postgres::types::Type::DATE, // due_date
-                tokio_postgres::types::Type::INT4, // settlement_mode
-                tokio_postgres::types::Type::INT8, // sales_person_nid
-                tokio_postgres::types::Type::INT8, // office_nid
-                tokio_postgres::types::Type::INT8, // referral_nid
-                tokio_postgres::types::Type::INT4, // commission_mode
-                tokio_postgres::types::Type::NUMERIC, // commission_percent
-                tokio_postgres::types::Type::NUMERIC, // buy_commission_percent
-                tokio_postgres::types::Type::NUMERIC, // sell_commission_percent
-                tokio_postgres::types::Type::NUMERIC, // vat_percent
-                tokio_postgres::types::Type::INT4, // currency_nid
-                tokio_postgres::types::Type::NUMERIC, // currency_rate
-                tokio_postgres::types::Type::NUMERIC, // minimum_fee
-                tokio_postgres::types::Type::NUMERIC, // buy_minimum_fee
-                tokio_postgres::types::Type::NUMERIC, // sell_minimum_fee
-                tokio_postgres::types::Type::NUMERIC, // wht_percent
-                tokio_postgres::types::Type::NUMERIC, // referral_percent
-                tokio_postgres::types::Type::BOOL, // referral_as_expense
-                tokio_postgres::types::Type::INT4, // settle_currency_nid
-                tokio_postgres::types::Type::NUMERIC, // settle_currency_rate
-                tokio_postgres::types::Type::BOOL, // day_trade
-                tokio_postgres::types::Type::BOOL, // online_trading
-                tokio_postgres::types::Type::BOOL, // force_buy_sell
-                tokio_postgres::types::Type::BOOL, // stamp_duty_as_expense
-                tokio_postgres::types::Type::BOOL, // exclude_stamp_duty_from_proceed_amount
-                tokio_postgres::types::Type::BOOL, // final
-                tokio_postgres::types::Type::BOOL, // full_trades
-                tokio_postgres::types::Type::BOOL, // checked
-                tokio_postgres::types::Type::BOOL, // approved
-                tokio_postgres::types::Type::BOOL, // rejected
-                tokio_postgres::types::Type::INT4, // change_nid
-                tokio_postgres::types::Type::INT4, // entry_user_nid
-                tokio_postgres::types::Type::VARCHAR, // entry_ip_address
-                tokio_postgres::types::Type::VARCHAR, // entry_computer_name
-                tokio_postgres::types::Type::TIMESTAMPTZ, // entry_time
+                tokio_postgres::types::Type::TIMESTAMP,             // 1. date
+                tokio_postgres::types::Type::INT4,                  // 2. client_nid
+                tokio_postgres::types::Type::INT4,                  // 3. client_trx_n_type
+                tokio_postgres::types::Type::VARCHAR,               // 4. buy_sell
+                tokio_postgres::types::Type::INT4,                  // 5. stock_nid
+                tokio_postgres::types::Type::INT4,                  // 6. order_nid
+                tokio_postgres::types::Type::NUMERIC,               // 7. buy_avg_price
+                tokio_postgres::types::Type::NUMERIC,               // 8. sell_avg_price
+                tokio_postgres::types::Type::INT8,                  // 9. buy_volume
+                tokio_postgres::types::Type::INT8,                  // 10. sell_volume
+                tokio_postgres::types::Type::NUMERIC,               // 11. buy_amount
+                tokio_postgres::types::Type::NUMERIC,               // 12. sell_amount
+                tokio_postgres::types::Type::NUMERIC,               // 13. buy_levy
+                tokio_postgres::types::Type::NUMERIC,               // 14. sell_levy
+                tokio_postgres::types::Type::NUMERIC,               // 15. buy_sinking_fund
+                tokio_postgres::types::Type::NUMERIC,               // 16. sell_sinking_fund
+                tokio_postgres::types::Type::NUMERIC,               // 17. income_tax
+                tokio_postgres::types::Type::NUMERIC,               // 18. buy_fee
+                tokio_postgres::types::Type::NUMERIC,               // 19. buy_vat
+                tokio_postgres::types::Type::NUMERIC,               // 20. buy_wapu_vat
+                tokio_postgres::types::Type::NUMERIC,               // 21. buy_wht
+                tokio_postgres::types::Type::NUMERIC,               // 22. buy_otc_fee
+                tokio_postgres::types::Type::NUMERIC,               // 23. buy_referral
+                tokio_postgres::types::Type::NUMERIC,               // 24. buy_other_charges
+                tokio_postgres::types::Type::NUMERIC,               // 25. sell_fee
+                tokio_postgres::types::Type::NUMERIC,               // 26. sell_vat
+                tokio_postgres::types::Type::NUMERIC,               // 27. sell_wapu_vat
+                tokio_postgres::types::Type::NUMERIC,               // 28. sell_wht
+                tokio_postgres::types::Type::NUMERIC,               // 29. sell_otc_fee
+                tokio_postgres::types::Type::NUMERIC,               // 30. sell_referral
+                tokio_postgres::types::Type::NUMERIC,               // 31. sell_other_charges
+                tokio_postgres::types::Type::NUMERIC,               // 32. ar_amount
+                tokio_postgres::types::Type::NUMERIC,               // 33. ap_amount
+                tokio_postgres::types::Type::NUMERIC,               // 34. net_amount
+                tokio_postgres::types::Type::TIMESTAMP,             // 35. cash_receive_date
+                tokio_postgres::types::Type::TIMESTAMP,             // 36. cash_payment_date
+                tokio_postgres::types::Type::TIMESTAMP,             // 37. stock_deliver_date
+                tokio_postgres::types::Type::TIMESTAMP,             // 38. stock_receive_date
+                tokio_postgres::types::Type::TIMESTAMP,             // 39. ar_due_date
+                tokio_postgres::types::Type::TIMESTAMP,             // 40. ap_due_date
+                tokio_postgres::types::Type::TIMESTAMP,             // 41. due_date
+                tokio_postgres::types::Type::INT4,                  // 42. settlement_mode
+                tokio_postgres::types::Type::INT4,                  // 43. sales_person_nid
+                tokio_postgres::types::Type::INT4,                  // 44. office_nid
+                tokio_postgres::types::Type::INT4,                  // 45. referral_nid
+                tokio_postgres::types::Type::INT4,                  // 46. commission_mode
+                tokio_postgres::types::Type::NUMERIC,               // 47. commission_percent
+                tokio_postgres::types::Type::NUMERIC,               // 48. buy_commission_percent
+                tokio_postgres::types::Type::NUMERIC,               // 49. sell_commission_percent
+                tokio_postgres::types::Type::NUMERIC,               // 50. vat_percent
+                tokio_postgres::types::Type::INT4,                  // 51. currency_nid
+                tokio_postgres::types::Type::NUMERIC,               // 52. currency_rate
+                tokio_postgres::types::Type::NUMERIC,               // 53. minimum_fee
+                tokio_postgres::types::Type::NUMERIC,               // 54. buy_minimum_fee
+                tokio_postgres::types::Type::NUMERIC,               // 55. sell_minimum_fee
+                tokio_postgres::types::Type::NUMERIC,               // 56. wht_percent
+                tokio_postgres::types::Type::NUMERIC,               // 57. referral_percent
+                tokio_postgres::types::Type::BOOL,                  // 58. referral_as_expense
+                tokio_postgres::types::Type::INT4,                  // 59. settle_currency_nid
+                tokio_postgres::types::Type::NUMERIC,               // 60. settle_currency_rate
+                tokio_postgres::types::Type::BOOL,                  // 61. day_trade
+                tokio_postgres::types::Type::BOOL,                  // 62. online_trading
+                tokio_postgres::types::Type::BOOL,                  // 63. force_buy_sell
+                tokio_postgres::types::Type::BOOL,                  // 64. stamp_duty_as_expense
+                tokio_postgres::types::Type::BOOL,                  // 65. exclude_stamp_duty_from_proceed_amount
+                tokio_postgres::types::Type::BOOL,                  // 66. final
+                tokio_postgres::types::Type::BOOL,                  // 67. full_trades
+                tokio_postgres::types::Type::BOOL,                  // 68. checked
+                tokio_postgres::types::Type::BOOL,                  // 69. approved
+                tokio_postgres::types::Type::BOOL,                  // 70. rejected
+                tokio_postgres::types::Type::INT4,                  // 71. change_nid
+                tokio_postgres::types::Type::INT4,                  // 72. entry_user_nid
+                tokio_postgres::types::Type::VARCHAR,               // 73. entry_ip_address
+                tokio_postgres::types::Type::VARCHAR,               // 74. entry_computer_name
+                tokio_postgres::types::Type::TIMESTAMP,             // 75. entry_time
+            ],
+        );
+
+        let mut writer = pin!(writer);
+        
+        let entry_time = chrono::Utc::now().naive_utc();
+
+        for r in rows {
+
+            let params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![
+                &r.date,                                            // 1. date
+                &r.client_nid,                                      // 2. client_nid
+                &r.client_trx_n_type,                               // 3. client_trx_n_type
+                &r.buy_sell,                                        // 4. buy_sell
+                &r.stock_nid,                                       // 5. stock_nid
+                &r.order_nid,                                       // 6. order_nid
+                &r.buy_avg_price,                                   // 7. buy_avg_price
+                &r.sell_avg_price,                                  // 8. sell_avg_price
+                &r.buy_volume,                                      // 9. buy_volume
+                &r.sell_volume,                                     // 10. sell_volume
+                &r.buy_amount,                                      // 11. buy_amount
+                &r.sell_amount,                                     // 12. sell_amount
+                &r.buy_levy_percent,                                // 13. buy_levy_percent
+                &r.sell_levy_percent,                               // 14. sell_levy_percent
+                &r.buy_sinking_fund_percent,                        // 15. buy_sinking_fund_percent
+                &r.sell_sinking_fund_percent,                       // 16. sell_sinking_fund_percent
+                &r.income_tax_percent,                              // 17. income_tax_percent
+                &Decimal::ZERO,                                     // 18. buy_fee
+                &Decimal::ZERO,                                     // 19. buy_vat
+                &Decimal::ZERO,                                     // 20. buy_wapu_vat
+                &Decimal::ZERO,                                     // 21. buy_wht
+                &Decimal::ZERO,                                     // 22. buy_otc_fee
+                &Decimal::ZERO,                                     // 23. buy_referral
+                &Decimal::ZERO,                                     // 24. buy_other_charges
+                &Decimal::ZERO,                                     // 25. sell_fee
+                &Decimal::ZERO,                                     // 26. sell_vat
+                &Decimal::ZERO,                                     // 27. sell_wapu_vat
+                &Decimal::ZERO,                                     // 28. sell_wht
+                &Decimal::ZERO,                                     // 29. sell_otc_fee
+                &Decimal::ZERO,                                     // 30. sell_referral
+                &Decimal::ZERO,                                     // 31. sell_other_charges
+                &r.buy_amount,                                      // 32. buy_amount
+                &r.sell_amount,                                     // 33. sell_amount
+                &r.net_amount,                                      // 34. net_amount
+                &r.due_date,                                        // 35. cash_receive_date
+                &r.due_date,                                        // 36. cash_payment_date
+                &r.due_date,                                        // 37. stock_deliver_date
+                &r.due_date,                                        // 38. stock_receive_date
+                &r.due_date,                                        // 39. ar_due_date
+                &r.due_date,                                        // 40. ap_due_date
+                &r.due_date,                                        // 41. due_date
+                &r.settlement_mode,                                 // 42. settlement_mode
+                &r.sales_person_nid,                                // 43. sales_person_nid
+                &r.office_nid,                                      // 44. office_nid
+                &r.referral_nid,                                    // 45. referral_nid
+                &r.commission_mode,                                 // 46. commission_mode
+                &r.commission_percent,                              // 47. commission_percent
+                &r.buy_commission_percent,                          // 48. buy_commission_percent
+                &r.sell_commission_percent,                         // 49. sell_commission_percent
+                &r.vat_percent,                                     // 50. vat_percent
+                &1i32,                                              // 51. currency_nid
+                &Decimal::ZERO,                                     // 52. currency_rate
+                &r.minimum_fee,                                     // 53. minimum_fee
+                &r.buy_minimum_fee,                                 // 54. buy_minimum_fee
+                &r.sell_minimum_fee,                                // 55. sell_minimum_fee
+                &r.wht_percent,                                     // 56. wht_percent
+                &Decimal::ZERO,                                     // 57. referral_percent
+                &r.referral_as_expense,                             // 58. referral_as_expense
+                &1i32,                                              // 59. settle_currency_nid
+                &Decimal::ZERO,                                     // 60. settle_currency_rate
+                &r.day_trade,                                       // 61. day_trade
+                &r.online_trading,                                  // 62. online_trading
+                &r.force_buy_sell,                                  // 63. force_buy_sell
+                &r.stamp_duty_as_expense,                           // 64. stamp_duty_as_expense
+                &r.exclude_stamp_duty_from_proceed_amount,          // 65. exclude_stamp_duty_from_proceed_amount
+                &true,                                              // 66. final
+                &false,                                             // 67. full_trades
+                &false,                                             // 68. checked
+                &false,                                             // 69. approved
+                &false,                                             // 70. rejected
+                &0i32,                                              // 71. change_nid
+                &r.entry_user_nid,                                  // 72. entry_user_nid
+                &r.entry_ip_address,                                // 73. entry_ip_address
+                &r.entry_computer_name,                             // 74. entry_computer_name
+                &entry_time,                                        // 75. entry_time
+            ];
+
+            writer.as_mut().write(&params).await?;
+        }
+
+        match writer.finish().await {
+            Ok(_) => (),
+            Err(e) => {
+                println!("Error: {:?}", e);
+                return Err(anyhow::anyhow!(e));
+            },
+        };
+        Ok(())
+    }
+
+    async fn insert_sales_person(&self, sales: &Vec<SalesPerson>) -> Result<()> {
+        let mut conn = self.conn.get().await?;
+        let tx = conn.transaction().await?;
+
+        let sink = tx.copy_in("COPY sales (
+            sales_id,
+            sales_name,
+            price,
+            expired_date
+        ) FROM STDIN (FORMAT BINARY)").await?;
+
+        let writer = BinaryCopyInWriter::new(
+            sink,
+            &[
+                tokio_postgres::types::Type::INT4,
+                tokio_postgres::types::Type::TEXT,
+                tokio_postgres::types::Type::NUMERIC,
+                tokio_postgres::types::Type::TIMESTAMP,
             ],
         );
 
         let mut writer = pin!(writer);
 
-        let mut sum_buy_volume: i64 = 0;
-        let mut sum_sell_volume: i64 = 0;
-        let mut sum_buy_amount: Decimal = Decimal::ZERO;
-        let mut sum_sell_amount: Decimal = Decimal::ZERO;
-
-        let mut sum_buy_levy: Decimal = Decimal::ZERO;
-        let mut sum_sell_levy: Decimal = Decimal::ZERO;
-        let mut sum_buy_sinking: Decimal = Decimal::ZERO;
-        let mut sum_sell_sinking: Decimal = Decimal::ZERO;
-        let mut sum_income_tax: Decimal = Decimal::ZERO;
-
-        for r in rows {
-            sum_buy_volume += r.buy_volume;
-            sum_sell_volume += r.sell_volume;
-            sum_buy_amount += r.buy_amount;
-            sum_sell_amount += r.sell_amount;
-
-            sum_buy_levy += r.buy_amount * r.levy_percent;
-            sum_sell_levy += r.sell_amount * r.levy_percent;
-
-            sum_buy_sinking += r.buy_amount * r.sinking_fund_percent;
-            sum_sell_sinking += r.sell_amount * r.sinking_fund_percent;
-
-            sum_income_tax += r.sell_amount * r.income_tax_percent;
-
+        for s in sales {
             writer.as_mut().write(&[
-                &r.date,
-                &r.client_nid,
-                &r.client_trx_n_type,
-                &r.buy_sell,
-                &r.stock_nid,
-                &r.order_nid,
-                &r.buy_avg_price,
-                &r.sell_avg_price,
-                &sum_buy_volume,
-                &sum_sell_volume,
-                &sum_buy_amount,
-                &sum_sell_amount,
-                &sum_buy_levy,
-                &sum_sell_levy,
-                &sum_buy_sinking,
-                &sum_sell_sinking,
-                &sum_income_tax,
-                &0,  // buy_fee
-                &0,  // buy_vat
-                &0,  // buy_wapu_vat
-                &0,  // buy_wht
-                &0,  // buy_otc_fee
-                &0,  // buy_referral
-                &0,  // buy_other_charges
-                &0,  // sell_fee
-                &0,  // sell_vat
-                &0,  // sell_wapu_vat
-                &0,  // sell_wht
-                &0,  // sell_otc_fee
-                &0,  // sell_referral
-                &0,  // sell_other_charges
-                &r.buy_amount, // ar_amount
-                &r.sell_amount, // ap_amount
-                &r.net_amount, // net_amount
-                &r.due_date, 
-                &r.due_date, 
-                &r.due_date, 
-                &r.due_date, 
-                &r.due_date, 
-                &r.due_date, 
-                &r.due_date, 
-                &r.settlement_mode,
-                &r.sales_person_nid,
-                &r.office_nid,
-                &r.referral_nid,
-                &r.commission_mode,
-                &r.commission_percent,
-                &r.buy_commission_percent,
-                &r.sell_commission_percent,
-                &r.vat_percent,
-                &1, // currency_nid
-                &1, // currency_rate
-                &r.minimum_fee,
-                &r.buy_minimum_fee,
-                &r.sell_minimum_fee,
-                &r.wht_percent,
-                &0, // referral_percent
-                &r.referral_as_expense,
-                &1, // settle_currency_nid
-                &1, // settle_currency_rate
-                &r.day_trade,
-                &r.online_trading,
-                &r.force_buy_sell,
-                &r.stamp_duty_as_expense,
-                &r.exclude_stamp_duty_from_proceed_amount,
-                &true, // final
-                &false, // checked
-                &false, // approved
-                &false, // rejected
-                &0, // change_nid
-                &r.entry_user_nid,
-                &r.entry_ip_address,
-                &r.entry_computer_name,
-                &chrono::Utc::now(),
+                &s.sales_id,
+                &s.sales_name,
+                &s.price,
+                &s.expired_date,
             ]).await?;
         }
 
         writer.finish().await?;
+
+        tx.commit().await?;
         Ok(())
     }
 

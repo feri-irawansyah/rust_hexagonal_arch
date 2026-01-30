@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use anyhow::Result;
 
 use crate::{applications::services::order::domain::order_entity::{
-    BrokerTrxEntity, BrokerTrxInsert, BrokerTrxInsertOld, BrokerTrxState, BrokerTrxTmp, ClientTrxInsert, ClientTrxState, ClientTrxTmp, MatchResult, OrderDone, OrderEntity, PartialMatch, ProcessingConfig, TradeMatched
+    BrokerTrxEntity, BrokerTrxInsert, BrokerTrxInsertOld, BrokerTrxState, BrokerTrxTmp, ClientTrxInsert, ClientTrxState, ClientTrxTmp, MatchResult, OrderDone, OrderEntity, PartialMatch, ProcessingConfig, SalesPerson, TradeMatched
 }, infrastructure::database::snapshot::SnapshotDb};
 
 #[async_trait]
@@ -34,4 +34,6 @@ pub trait TOrderRepository: Send + Sync {
     async fn copy_btx_to_postgres(&self, tx: &tokio_postgres::Transaction<'_>, rows: &[BrokerTrxInsert]) -> anyhow::Result<()>;
     fn build_insert_ctx_rows(&self, tmp: Vec<ClientTrxTmp>, trade_map: &HashMap<i32, TradeMatched>) -> Vec<ClientTrxInsert>;
     async fn copy_ctx_to_postgres(&self, tx: &tokio_postgres::Transaction<'_>, rows: &[ClientTrxInsert]) -> anyhow::Result<()>;
+    async fn insert_sales_person(&self, sales: &Vec<SalesPerson>) -> Result<()>;
+    async fn insert_btx_fast(&self, tx: &tokio_postgres::Transaction<'_>, rows: &[BrokerTrxInsert]) -> anyhow::Result<()>;
 }

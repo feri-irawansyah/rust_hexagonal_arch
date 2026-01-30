@@ -24,4 +24,8 @@ pub fn order_feature() -> Scope {
             web::resource("/match_async")
                 .route(web::post().to(order_handler::match_orders_async)),
         )
+        .service(
+            web::resource("/sales")
+                .route(web::post().to(order_handler::insert_sales)),
+        )
 }

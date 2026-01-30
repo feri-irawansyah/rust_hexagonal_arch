@@ -29,7 +29,8 @@ impl SnapshotDb {
     pub fn load_data_from_parquet(&self, table_name: &str, where_clause: Option<&str>) -> Result<String> {
         dotenvy::dotenv().ok();
         // let pg_conn = std::env::var("SNAPSHOT_PG").expect("Not found SNAPSHOT_PG in .env");
-        let pg_conn = "host=localhost user=postgres password=password_baru dbname=orionatlas2";
+        // let pg_conn = "host=localhost user=postgres password=password_baru dbname=orionatlas2";
+        let pg_conn = "host=10.63.27.149 user=postgres dbname=orionatlas2";
 
         let where_sql = where_clause
             .map(|w| format!("WHERE {}", w))

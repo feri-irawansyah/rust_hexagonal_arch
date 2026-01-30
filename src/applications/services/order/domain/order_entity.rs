@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::NaiveDateTime;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -69,7 +69,7 @@ pub struct OrderEntity {
 #[derive(Debug, Clone, Default)]
 pub struct BrokerTrxEntity {
     pub broker_trx_nid: i32,
-    pub date: chrono::NaiveDateTime,
+    pub date: NaiveDateTime,
     pub broker_nid: i32,
     pub broker_trx_n_type: i32,
     pub buy_sell: String,
@@ -95,7 +95,7 @@ pub struct ProcessingConfig {
     pub default_market_nid: i32,
     pub default_board_nid: i32,
     pub default_due_days: i32,
-    pub processing_date: chrono::NaiveDateTime,
+    pub processing_date: NaiveDateTime,
     pub user_nid: i32,
     pub ip_address: String,
     pub computer_name: String,
@@ -150,14 +150,14 @@ pub struct TradeMatched {
 // }
 pub struct BrokerTrxTmp {
     pub broker_nid: i32,
-    pub broker_trx_n_type: i16,
+    pub broker_trx_n_type: i32,
     pub b_buy_sell: char,
     pub b_stock_nid: i32,
     pub b_trade_nid: i32,
     pub total_buy_volume: i64,
     pub total_sell_volume: i64,
-    pub due_date: NaiveDate,
-    pub settlement_mode: i16,
+    pub due_date: NaiveDateTime,
+    pub settlement_mode: i32,
     pub commission_percent: Decimal,
     pub buy_commission_percent: Decimal,
     pub sell_commission_percent: Decimal,
@@ -171,7 +171,7 @@ pub struct BrokerTrxTmp {
 #[derive(Debug, Clone, Default)]
 pub struct ClientTrxTmp {
     pub client_nid: i32,
-    pub client_trx_n_type: i16,
+    pub client_trx_n_type: i32,
     pub c_buy_sell: char,
     pub c_stock_nid: i32,
     pub c_order_nid: i32,
@@ -179,15 +179,12 @@ pub struct ClientTrxTmp {
     pub c_sell_avg_price: Decimal,
     pub buy_volume: i64,
     pub sell_volume: i64,
-    pub levy_percent: Decimal,
-    pub sinking_fund_percent: Decimal,
-    pub income_tax_percent: Decimal,
-    pub due_date: NaiveDate,
-    pub c_settlement_mode: i16,
+    pub due_date: NaiveDateTime,
+    pub c_settlement_mode: i32,
     pub sales_person_nid: i32,
     pub office_nid: i32,
     pub referral_nid: i32,
-    pub commission_mode: i16,
+    pub commission_mode: i32,
     pub commission_percent: Decimal,
     pub buy_commission_percent: Decimal,
     pub sell_commission_percent: Decimal,
@@ -202,13 +199,17 @@ pub struct ClientTrxTmp {
     pub force_buy_sell: bool,
     pub stamp_duty_as_expense: bool,
     pub exclude_stamp_duty_from_proceed_amount: bool,
+    pub levy_percent: Vec<Decimal>,
+    pub sinking_fund_percent: Vec<Decimal>,
+    pub income_tax_percent: Vec<Decimal>,
+    pub order_nids: Vec<i32>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct BrokerTrxInsert {
-    pub date: NaiveDate,
+    pub date: NaiveDateTime,
     pub broker_nid: i32,
-    pub broker_trx_n_type: i16,
+    pub broker_trx_n_type: i32,
     pub buy_sell: String,
     pub stock_nid: i32,
     pub trade_nid: i32,
@@ -219,8 +220,8 @@ pub struct BrokerTrxInsert {
     pub ar_amount: Decimal,
     pub ap_amount: Decimal,
     pub net_amount: Decimal,
-    pub due_date: NaiveDate,
-    pub settlement_mode: i16,
+    pub due_date: NaiveDateTime,
+    pub settlement_mode: i32,
     pub commission_percent: Decimal,
     pub buy_commission_percent: Decimal,
     pub sell_commission_percent: Decimal,
@@ -234,9 +235,9 @@ pub struct BrokerTrxInsert {
 
 #[derive(Debug, Clone, Default)]
 pub struct ClientTrxInsert {
-    pub date: NaiveDate,
+    pub date: NaiveDateTime,
     pub client_nid: i32,
-    pub client_trx_n_type: i16,
+    pub client_trx_n_type: i32,
     pub buy_sell: String,
     pub stock_nid: i32,
     pub order_nid: i32,
@@ -244,18 +245,20 @@ pub struct ClientTrxInsert {
     pub sell_avg_price: Decimal,
     pub buy_volume: i64,
     pub sell_volume: i64,
-    pub levy_percent: Decimal, 
-    pub sinking_fund_percent: Decimal,
+    pub buy_levy_percent: Decimal, 
+    pub sell_levy_percent: Decimal, 
+    pub buy_sinking_fund_percent: Decimal,
+    pub sell_sinking_fund_percent: Decimal,
     pub income_tax_percent: Decimal, 
     pub buy_amount: Decimal,
     pub sell_amount: Decimal,
     pub net_amount: Decimal,
-    pub due_date: NaiveDate,
-    pub settlement_mode: i16,
+    pub due_date: NaiveDateTime,
+    pub settlement_mode: i32,
     pub sales_person_nid: i32,
     pub office_nid: i32,
     pub referral_nid: i32,
-    pub commission_mode: i16,
+    pub commission_mode: i32,
     pub commission_percent: Decimal,
     pub buy_commission_percent: Decimal,
     pub sell_commission_percent: Decimal,
@@ -299,4 +302,12 @@ pub struct BrokerTrxInsertOld {
     pub buy_minimum_fee: Option<usize>,
     pub sell_minimum_fee: Option<usize>,
     pub entry_time: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SalesPerson {
+    pub sales_id: i32,
+    pub sales_name: String,
+    pub price: Decimal,
+    pub expired_date: NaiveDateTime
 }

@@ -5,7 +5,7 @@ use tokio::{sync::mpsc, time::Instant};
 
 use crate::{
     applications::{
-        contracts::order_trait::TOrderRepository, services::order::domain::order_entity::{BrokerTrxState, ClientTrxState, MatchResult, OrderDone, OrderEntity, PartialMatch, ProcessingConfig}
+        contracts::order_trait::TOrderRepository, services::order::domain::order_entity::{BrokerTrxState, ClientTrxState, MatchResult, OrderDone, OrderEntity, PartialMatch, ProcessingConfig, SalesPerson}
     }, 
     infrastructure::database::snapshot::SnapshotDb
 };
@@ -208,6 +208,32 @@ impl OrderService {
 
             let snapshot = SnapshotDb::new().unwrap();
             let handle = tokio::task::spawn_blocking(move || -> Result<MatchResult> {
+
+                let tables = vec![
+                    ("trade", None),
+                    ("setup", None),
+                    ("setup_contracting", None),
+                    ("board", None),
+                    ("market", None),
+                    ("client", None),
+                    ("broker", None),
+                    ("order", None),
+                    ("broker_commission_trx", None),
+                    ("client_commission_trx", None),
+                    ("trx_type_match", None),
+                    ("trx_type", None),
+                    ("mv_temp_broker_trx", None),
+                    ("mv_temp_client_trx", None),
+                ];
+
+                for (table, where_clause) in tables {
+                    let start = Instant::now();
+                    if let Err(e) = snapshot.load_data_from_parquet(table, where_clause) {
+                        eprintln!("[JOB] snapshot failed table={}: {}", table, e);
+                        continue;
+                    }
+                    println!("[JOB] snapshot table={} done in {:?}", table, start.elapsed());
+                }
                 // temp tables
                 // repo_clone.create_btx_temp(&snapshot)?;
                 // println!("[JOB] Temp Broker Trx created {:?}", start.elapsed());
@@ -323,6 +349,117 @@ impl OrderService {
         });
 
         Ok("Match async job started".to_string())
+    }
+
+    pub async fn insert_sales(&self) -> Result<()> {
+        
+        let sales = vec![
+            SalesPerson {
+                sales_id: 1,
+                sales_name: "sales1".to_string(),
+                price: rust_decimal::Decimal::from_i32(100).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 2,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_str_exact("2825565433600.000000000000").unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 3,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_str_exact("-48339295200.000000000000").unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 4,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+            SalesPerson {
+                sales_id: 5,
+                sales_name: "sales2".to_string(),
+                price: rust_decimal::Decimal::from_i32(200).unwrap(),
+                expired_date: chrono::Utc::now().naive_utc(),
+            },
+        ];
+
+        self.repo.insert_sales_person(&sales).await
+
     }
 
 }
